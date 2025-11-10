@@ -21,6 +21,10 @@
     @keyframes tada-effect{0%{transform:scale(1)}10%,20%{transform:scale(.9) rotate(-3deg)}30%,50%,70%,90%{transform:scale(1.1) rotate(3deg)}40%,60%,80%{transform:scale(1.1) rotate(-3deg)}100%{transform:scale(1)}}
     .effect-ping{position:absolute;inset:0;border-radius:50%;background:rgba(34,197,94,.5);animation:ping-effect 1s cubic-bezier(0,0,.2,1)}
     .effect-tada{animation:tada-effect 1s ease-in-out}
+
+    /* 設定ビューの右スクロールバーを非表示 */
+    #settings-view { scrollbar-width: none; }
+    #settings-view::-webkit-scrollbar { width:0; height:0; }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-800 h-screen w-screen overflow-hidden">
@@ -36,11 +40,11 @@
           <div class="flex gap-4">
             <div>
               <label class="block text-md font-medium mb-2">行</label>
-              <input id="grid-rows" type="number" min="3" max="10" value="4" class="w-24 p-3 border rounded-lg text-lg" />
+              <input id="grid-rows" type="number" min="3" max="10" value="5" class="w-24 p-3 border rounded-lg text-lg" />
             </div>
             <div>
               <label class="block text-md font-medium mb-2">列</label>
-              <input id="grid-cols" type="number" min="3" max="10" value="5" class="w-24 p-3 border rounded-lg text-lg" />
+              <input id="grid-cols" type="number" min="3" max="10" value="6" class="w-24 p-3 border rounded-lg text-lg" />
             </div>
           </div>
         </fieldset>
@@ -135,8 +139,14 @@
 
     // 状態
     const allWaypointIcons = ['🍔','🍎','🍰','🍉','🍓','🍇','🥝','🍍','🍕','🍩','🥐','🍗','❤️','💚','💛','💙','🩷'];
-    let landmarks = allWaypointIcons.slice(0,6);
-    let gameConfig = { gridRows:4, gridCols:5, start:null, goal:null, waypoints:[], walls:[], waypointsCount:0 };
+    // アイコンの順序を毎回ランダム化
+    let landmarks = shuffle(allWaypointIcons).slice(0,6);
+    let iconIndex = 0;
+    const pickNextIcon = () => landmarks[(iconIndex++) % landmarks.length];
+    const resetIcons = () => { landmarks = shuffle(allWaypointIcons).slice(0,6); iconIndex = 0; };
+
+    // 初期値を 5×6 に
+    let gameConfig = { gridRows:5, gridCols:6, start:null, goal:null, waypoints:[], walls:[], waypointsCount:0 };
     let gameState = { player:{row:0,col:0,dir:'up'}, sequence:[], collectedWaypoints:new Set(), isRunning:false, moveMode:'absolute' };
 
     const playerElement = document.createElement('span');
@@ -150,8 +160,8 @@
     gridColsInput.addEventListener('input', updateSettingGrid);
 
     function updateSettingGrid(){
-      let rows = clamp(parseInt(gridRowsInput.value)||4,3,10);
-      let cols = clamp(parseInt(gridColsInput.value)||5,3,10);
+      let rows = clamp(parseInt(gridRowsInput.value)||5,3,10);
+      let cols = clamp(parseInt(gridColsInput.value)||6,3,10);
       gridRowsInput.value = rows; gridColsInput.value = cols;
       gameConfig.gridRows = rows; gameConfig.gridCols = cols;
       settingGridContainer.innerHTML='';
@@ -161,6 +171,7 @@
       if (gameConfig.goal && (gameConfig.goal.row>=rows||gameConfig.goal.col>=cols)) gameConfig.goal=null;
       gameConfig.waypoints = gameConfig.waypoints.filter(w=>w.row<rows&&w.col<cols);
       gameConfig.walls = gameConfig.walls.filter(w=>w.row<rows&&w.col<cols);
+      // 既存WPのアイコンは順序に合わせて再付与
       gameConfig.waypoints.forEach((wp,i)=>wp.icon=landmarks[i%landmarks.length]);
       for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
         const d=document.createElement('div');
@@ -190,7 +201,7 @@
         case 'waypoint':
           if(wpi===-1){
             if(gameConfig.waypoints.length<6){
-              const icon=landmarks[gameConfig.waypoints.length%landmarks.length];
+              const icon = pickNextIcon(); // ← ランダム順アイコン
               gameConfig.waypoints.push({row,col,icon});
             } else {
               flashError('通過地点は6個までです');
@@ -204,7 +215,8 @@
           /* 何もしない（上で削除済） */
           break;
       }
-      gameConfig.waypoints.forEach((wp,i)=>wp.icon=landmarks[i%landmarks.length]);
+      // 並び替え時の見た目整合
+      gameConfig.waypoints.forEach((wp,i)=>wp.icon=gameConfig.waypoints[i].icon ?? landmarks[i%landmarks.length]);
       updateSettingGridUI();
     }
 
@@ -223,6 +235,7 @@
       gridRowsInput.value=gameConfig.gridRows;
       gridColsInput.value=gameConfig.gridCols;
       gameConfig.waypointsCount=rand(0,6);
+      resetIcons();
       randomizeItemPlacement();
       updateSettingGrid();
     });
@@ -230,20 +243,20 @@
       gameConfig.gridRows=+gridRowsInput.value;
       gameConfig.gridCols=+gridColsInput.value;
       gameConfig.waypointsCount=gameConfig.waypoints.length;
+      resetIcons();
       randomizeItemPlacement();
       updateSettingGridUI();
     });
 
     function randomizeItemPlacement(){
       const rows=gameConfig.gridRows, cols=gameConfig.gridCols, count=gameConfig.waypointsCount; const used=new Set();
-      landmarks = shuffle(allWaypointIcons).slice(0,6);
       gameConfig.walls=[];
       gameConfig.start = randomEmpty(rows,cols,used);
       gameConfig.goal = randomEmpty(rows,cols,used);
       gameConfig.waypoints=[];
       for(let i=0;i<count;i++){
         const p=randomEmpty(rows,cols,used);
-        gameConfig.waypoints.push({row:p.row,col:p.col,icon:landmarks[i]});
+        gameConfig.waypoints.push({row:p.row,col:p.col,icon:pickNextIcon()});
       }
     }
 
@@ -467,9 +480,9 @@
       const all = gameState.collectedWaypoints.size===gameConfig.waypoints.length;
       if(atGoal && all){
         messageArea.textContent='🎉 クリア！おめでとう！';
-        // 先にポーン（0.3s）→その後「わーい！」を発話
+        // 先にポーン（0.3s）→ その後「わーい！」までの待ちを +1秒長く
         playTone(880,0.3);
-        setTimeout(()=>{ sayWaai(); }, 350);
+        setTimeout(()=>{ sayWaai(); }, 1350); // 350ms → 1350ms
         const goal=document.getElementById(`cell-${gameConfig.goal.row}-${gameConfig.goal.col}`);
         if(goal){ goal.classList.add('effect-tada'); setTimeout(()=>goal.classList.remove('effect-tada'),1000); }
       }
@@ -530,7 +543,7 @@
     // SW
     if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
-    // 初期（※ 強制ランダムはやめる：4×5のまま）
+    // 初期（5×6固定で開始、強制ランダム化なし）
     updateSettingGrid();
     setMoveMode('absolute');
   });
