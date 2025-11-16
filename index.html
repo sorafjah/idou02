@@ -2,35 +2,74 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>交差点ナビゲーター</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no" />
+  <title>プログラミング・パズルゲーム v2</title>
+  <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
-  <link rel="manifest" href="manifest.json">
+  <!-- 404回避用のデータURLファビコン -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E🗺️%3C/text%3E%3C/svg%3E">
   <meta name="theme-color" content="#ffffff">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
-    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; overscroll-behavior: none; }
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; overscroll-behavior: none; touch-action: manipulation; }
+
+    :root{
+      /* くすみ水色（壁色）*/
+      --muted-sky: #a7c7d9;
+      --muted-sky-dark: #8fb4ca;
+    }
+
+    /* グリッドセル共通 */
     .grid-cell { width: 100%; height: 100%; aspect-ratio: 1/1; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; border: 1px solid #d1d5db; background:#f9fafb; position: relative; }
     .setting-grid-cell { width: 100%; aspect-ratio: 1/1; display: flex; justify-content:center; align-items:center; font-size:1.25rem; border:1px solid #e5e7eb; background:#f9fafb; cursor:pointer; }
-    #player { font-size: 1.25rem; z-index: 10; }
-    .mode-btn { padding: .5rem 1rem; border: 1px solid #d1d5db; background:#f9fafb; color:#6b7280; }
+
+    #player { font-size: 1.25rem; z-index: 10; transition: none; }
+    /* ⑧ アイコン回転アニメーション用 */
+    .player-icon-inner { display: inline-block; transition: transform 0.3s ease-in-out; }
+
+    /* モードボタン */
+    .mode-btn { padding: .5rem 0.5rem; border: 1px solid #d1d5db; background:#f9fafb; color:#6b7280; font-size: 0.9rem; }
     .mode-btn.active{ background:#3b82f6; color:#fff; border-color:#3b82f6; }
+
+    /* アニメーション */
     @keyframes ping-effect{0%{transform:scale(1);opacity:1}75%,100%{transform:scale(2);opacity:0}}
     @keyframes tada-effect{0%{transform:scale(1)}10%,20%{transform:scale(.9) rotate(-3deg)}30%,50%,70%,90%{transform:scale(1.1) rotate(3deg)}40%,60%,80%{transform:scale(1.1) rotate(-3deg)}100%{transform:scale(1)}}
     .effect-ping{position:absolute;inset:0;border-radius:50%;background:rgba(34,197,94,.5);animation:ping-effect 1s cubic-bezier(0,0,.2,1)}
     .effect-tada{animation:tada-effect 1s ease-in-out}
-    /* 設定ビューのスクロールバーだけ非表示（スクロール動作は維持） */
+
+    /* 設定ビューのスクロールバー非表示 */
     #settings-view { scrollbar-width: none; }
     #settings-view::-webkit-scrollbar { width:0; height:0; }
+
+    /* 相対方位コマンドの強調表示 */
+    .cmd-relative { border: 2px solid #22d3ee; background-color: #ecfeff; color: #0e7490; font-weight: bold; }
+
+    /* ④, ⑥ シーケンス強調 */
+    .seq-highlight { background-color: #fef08a; transform: scale(1.1); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .seq-error { background-color: #ef4444; color: white; transform: scale(1.1); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+
+    /* 東西南北ラベル（東西南北モードのときだけ表示） */
+    .cardinal-label { position:absolute; display:none; font-weight:600; color:#334155; }
+    .mode-cardinal .cardinal-label { display:block; }
+    .cardinal-n { top: -1.5rem; left: 50%; transform: translateX(-50%); }
+    .cardinal-s { bottom: -1.5rem; left: 50%; transform: translateX(-50%); }
+    .cardinal-e { right: -1.5rem; top: 50%; transform: translateY(-50%); }
+    .cardinal-w { left: -1.5rem; top: 50%; transform: translateY(-50%); }
+
+    /* 壁スタイル（くすみ水色） */
+    .wall-cell { background-color: var(--muted-sky); }
+    .setting-wall-cell { background-color: var(--muted-sky-dark); }
+    /* ② 一方向壁 */
+    .setting-oneway-cell { background-color: #e0f2fe; color: #0c4a6e; }
+
   </style>
 </head>
 <body class="bg-gray-100 text-gray-800 h-screen w-screen overflow-hidden">
 
   <!-- 設定ビュー -->
   <div id="settings-view" class="p-4 md:p-8 max-w-4xl mx-auto h-full overflow-y-auto">
-    <h1 class="text-3xl font-bold mb-6 text-center text-blue-600">&nbsp;</h1>
+    <h1 class="text-3xl font-bold mb-6 text-center text-blue-600">プログラミング・パズル</h1>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <!-- 左：入力 -->
       <div class="space-y-6 bg-white p-6 rounded-lg shadow-md">
@@ -47,19 +86,42 @@
             </div>
           </div>
         </fieldset>
+        
+        <!-- ⑧ プレイヤーアイコン選択 -->
+        <fieldset class="border p-4 rounded-lg">
+          <legend class="text-lg font-medium px-2">プレイヤーアイコン</legend>
+          <div id="icon-selector" class="flex gap-4 items-center">
+            <label class="cursor-pointer"><input type="radio" name="player-icon" value="arrow" checked> <span class="text-2xl ml-1 align-middle">▲</span></label>
+            <label class="cursor-pointer"><input type="radio" name="player-icon" value="car"> <span class="text-2xl ml-1 align-middle">🚗</span></label>
+            <label class="cursor-pointer"><input type="radio" name="player-icon" value="chick"> <span class="text-2xl ml-1 align-middle">🐤</span></label>
+          </div>
+        </fieldset>
+
         <fieldset class="border p-4 rounded-lg">
           <legend class="text-lg font-medium px-2">アイテム選択</legend>
-          <div id="item-selector" class="flex flex-wrap gap-4">
-            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="start" checked><span class="text-lg">🏝️ スタート</span></label>
+          <!-- ② 一方向壁 / ③ 順序付きWP を追加 -->
+          <div id="item-selector" class="grid grid-cols-2 gap-3">
+            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="start" checked><span class="text-lg text-green-600">▲ スタート</span></label>
             <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="goal"><span class="text-lg">🏠 ゴール</span></label>
-            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="waypoint"><span class="text-lg">🍔 通過地点</span></label>
-            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="wall"><span class="text-lg">❌ 通行不可</span></label>
+            
+            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="wall"><span class="text-lg"><span class="inline-block w-5 h-5 rounded-sm align-middle" style="background: var(--muted-sky);"></span> 壁</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="impassable"><span class="text-lg">👻 通行不可</span></label>
+
+            <!-- ③ 順序付きWP -->
+            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="waypoint"><span class="text-lg">1️⃣ 通過地点</span></label>
             <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="erase"><span class="text-lg">🗑️ 消しゴム</span></label>
+            
+            <!-- ② 一方向壁 -->
+            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="oneWayUp"><span class="text-lg">⬆️ 壁(上へ)</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="oneWayRight"><span class="text-lg">➡️ 壁(右へ)</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="oneWayDown"><span class="text-lg">⬇️ 壁(下へ)</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="item-type" value="oneWayLeft"><span class="text-lg">⬅️ 壁(左へ)</span></label>
           </div>
-          <p class="text-sm text-gray-600 mt-2">通過地点は最大6個。ランダム配置も可。</p>
+          <p class="text-sm text-gray-600 mt-2">通過地点は 1, 2, 3... の順に配置されます (最大6個)。</p>
         </fieldset>
+        
         <div class="space-y-3 pt-2">
-          <button id="random-all-btn" class="w-full p-3 bg-green-500 text-white rounded-lg shadow">🎲 全設定ランダム（壁なし）</button>
+          <button id="random-all-btn" class="w-full p-3 bg-green-500 text-white rounded-lg shadow">🎲 全設定ランダム</button>
           <button id="random-items-btn" class="w-full p-3 bg-green-500 text-white rounded-lg shadow">🔄 アイテムのみランダム</button>
           <button id="start-game-btn" class="w-full p-3 bg-blue-600 text-white rounded-lg shadow">🚀 ゲーム開始</button>
         </div>
@@ -76,23 +138,35 @@
   <!-- ゲームビュー -->
   <div id="game-view" class="hidden h-screen w-screen flex flex-col p-4">
     <div class="flex justify-between items-center mb-2 w-full max-w-7xl mx-auto flex-shrink-0">
-      <span class="text-lg">&nbsp;</span>
+      <!-- ① ターン数 -->
+      <span id="turn-info" class="text-lg font-medium text-blue-700"></span>
+      <!-- ⑥ メッセージエリア -->
       <div id="message-area" class="text-xl font-semibold text-green-600 h-8 text-right"></div>
     </div>
 
     <div class="flex-grow flex flex-col md:flex-row-reverse gap-4 w-full max-w-7xl mx-auto overflow-hidden">
       <!-- 右：グリッド（大） -->
-      <div class="flex-grow flex justify-center items-center md:w-3/5 h-full">
-        <div id="grid-container" class="grid bg-white shadow-lg rounded-lg border border-gray-300"></div>
+      <div class="flex-grow flex justify-center items-center md:w-3/5 h-full relative">
+        <!-- 東西南北ラベル用ラッパー -->
+        <div id="grid-wrapper" class="relative">
+          <span class="cardinal-label cardinal-n">北</span>
+          <span class="cardinal-label cardinal-s">南</span>
+          <span class="cardinal-label cardinal-e">東</span>
+          <span class="cardinal-label cardinal-w">西</span>
+          <div id="grid-container" class="grid bg-white shadow-lg rounded-lg border border-gray-300"></div>
+        </div>
       </div>
       <!-- 左：操作（コンパクト） -->
       <div class="flex flex-col md:w-2/5 space-y-3 h-full">
+        <!-- ④, ⑥ シーケンス表示 -->
         <div class="bg-white p-3 rounded-lg shadow-md border flex-grow min-h-[320px] overflow-y-auto">
-          <div id="sequence-display" class="flex flex-wrap gap-2 text-2xl"></div>
+          <div id="sequence-display" class="flex flex-wrap gap-2 text-2xl items-start content-start"></div>
         </div>
+        <!-- モードボタン（3つ） -->
         <div class="flex rounded-md shadow-sm">
-          <button id="mode-absolute-btn" class="mode-btn active w-1/2 rounded-l-md">絶対方位</button>
-          <button id="mode-relative-btn" class="mode-btn w-1/2 rounded-r-md">相対方位</button>
+          <button id="mode-absolute-btn" class="mode-btn active w-1/3 rounded-l-md">絶対方位</button>
+          <button id="mode-cardinal-btn" class="mode-btn w-1/3 border-l-0 border-r-0">東西南北</button>
+          <button id="mode-relative-btn" class="mode-btn w-1/3 rounded-r-md">相対方位</button>
         </div>
         <div id="direction-pad" class="p-2 bg-white rounded-lg shadow-md h-[120px] flex justify-center items-center"></div>
         <div class="grid grid-cols-4 gap-2">
@@ -107,10 +181,9 @@
   </div>
 
   <script>
-  // ===== ユーティリティ（先に宣言：shuffle を先に使うため）=====
+  // ===== ユーティリティ =====
   const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
   const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
-  const coordToString=o=>`${o.row},${o.col}`;
   const shuffle = (arr) => arr.map(v=>[Math.random(),v]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
   const delay=ms=>new Promise(res=>setTimeout(res,ms));
 
@@ -126,75 +199,130 @@
     const randomItemsBtn = document.getElementById('random-items-btn');
     const startGameBtn = document.getElementById('start-game-btn');
     const settingsError = document.getElementById('settings-error');
+    const iconSelector = document.getElementById('icon-selector'); // ⑧
 
     const backToSettingsBtn = document.getElementById('back-to-settings-btn');
     const gridContainer = document.getElementById('grid-container');
+    const gridWrapper = document.getElementById('grid-wrapper');
     const sequenceDisplay = document.getElementById('sequence-display');
     const directionPad = document.getElementById('direction-pad');
+
     const modeAbsoluteBtn = document.getElementById('mode-absolute-btn');
+    const modeCardinalBtn = document.getElementById('mode-cardinal-btn');
     const modeRelativeBtn = document.getElementById('mode-relative-btn');
+
     const undoBtn = document.getElementById('undo-btn');
     const resetBtn = document.getElementById('reset-btn');
     const stepBtn = document.getElementById('step-btn');
     const runBtn = document.getElementById('run-btn');
-    const messageArea = document.getElementById('message-area');
+    const messageArea = document.getElementById('message-area'); // ⑥
+    const turnInfo = document.getElementById('turn-info'); // ①
 
-    // ---- 音（ユーザー操作後のみ初期化）----
-    let synth; // Tone.js
+    // ---- 音（ユーザー操作後のみ初期化：iPad対応）----
+    let synth; let drum; let noise; let mono;
     async function initAudio(){
       try{
         if(!synth){
-          // ユーザー操作後でないと start() が拒否されることがある
-          if (Tone.context.state !== 'running') {
-            await Tone.start(); // ユーザー操作後ならOK
-          }
-          synth=new Tone.Synth().toDestination();
+          if (Tone.context.state !== 'running') await Tone.start();
+          synth=new Tone.Synth({ oscillator:{type:'triangle'}, envelope:{attack:0.01,decay:0.2,sustain:0,release:0.8} }).toDestination();
+          mono=new Tone.MonoSynth({ oscillator:{type:'square'}, envelope:{attack:0.01,decay:0.3,sustain:0,release:1.2} }).toDestination();
+          drum=new Tone.MembraneSynth({ pitchDecay:0.03, octaves:6, oscillator:{type:'sine'}, envelope:{attack:0.001,decay:0.4,sustain:0,release:0.1} }).toDestination();
+          noise=new Tone.NoiseSynth({ volume:-10, envelope:{attack:0.001, decay:0.15, sustain:0} }).toDestination();
         }
-      }catch(e){
-        // ブラウザが拒否した場合は黙ってスキップ（次の操作でまた試行）
-        console.warn('Audio init deferred:', e?.message);
-      }
+      }catch(e){ console.warn('Audio init deferred:', e?.message); }
     }
-    // どれかのユーザー操作で一度だけ初期化を試みる
-    ['pointerdown','keydown'].forEach(ev=>{
+    ['pointerdown','keydown','touchstart'].forEach(ev=>{
       window.addEventListener(ev, ()=>initAudio(), { once:true, passive:true });
     });
 
     function playTone(freqOrNote, dur){ if(synth) synth.triggerAttackRelease(freqOrNote,dur); }
-    function sayWaai(){ try{ const u=new SpeechSynthesisUtterance('わーい！'); u.lang='ja-JP'; window.speechSynthesis.speak(u);}catch(e){} }
+
+    // ✅ ゴール成功音（明るめ）
+    function playSuccess(){
+      if(!synth) return;
+      const now = Tone.now();
+      const notes = ['C5','E5','G5','C6'];
+      notes.forEach((n,i)=>synth.triggerAttackRelease(n, 0.12, now + i*0.12));
+    }
+
+    // ✅ 失敗音：「ちゃらりろりーん↓」低め・長め（下降）
+    function playFailLong(){
+      if(!mono) return;
+      const t = Tone.now();
+      const seq = [ ['E3',0.25], ['D3',0.25], ['C3',0.35], ['A2',0.6] ]; // 下降して最後長め
+      let acc = 0;
+      seq.forEach(([n,d])=>{ mono.triggerAttackRelease(n, d, t+acc); acc += d*0.9; });
+    }
+
+    // ✅ 👻ヒット音：「どっ・どっ・どーとー」3連ドラム＋ノイズ 即終了
+    function playGhostTriple(){
+      if(!drum||!noise) return;
+      const t = Tone.now();
+      drum.triggerAttackRelease('C2','8n', t + 0.00); // どっ
+      drum.triggerAttackRelease('C2','8n', t + 0.28); // どっ
+      drum.triggerAttackRelease('A1','4n', t + 0.56); // どーー
+      noise.triggerAttackRelease('16n', t + 0.60);   // とー（ノイズ添え）
+    }
 
     // 状態
-    const allWaypointIcons = ['🍔','🍎','🍰','🍉','🍓','🍇','🥝','🍍','🍕','🍩','🥐','🍗','❤️','💚','💛','💙','🩷'];
-    let landmarks = shuffle(allWaypointIcons).slice(0,6); // ← 先に宣言済みの shuffle を使用
-    let iconIndex = 0;
-    const pickNextIcon = () => landmarks[(iconIndex++) % landmarks.length];
-    const resetIcons = () => { landmarks = shuffle(allWaypointIcons).slice(0,6); iconIndex = 0; };
+    // ③ ウェイポイントアイコン (1️⃣〜6️⃣)
+    const waypointIcons = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣'];
+    const onewayIcons = { oneWayUp: '⬆️', oneWayDown: '⬇️', oneWayLeft: '⬅️', oneWayRight: '➡️' };
 
-    // 初期値 5×6
-    let gameConfig = { gridRows:5, gridCols:6, start:null, goal:null, waypoints:[], walls:[], waypointsCount:0 };
-    let gameState = { player:{row:0,col:0,dir:'up'}, sequence:[], collectedWaypoints:new Set(), isRunning:false, moveMode:'absolute' };
+    let gameConfig = { 
+        gridRows:5, 
+        gridCols:6, 
+        start:null, 
+        goal:null, 
+        waypoints:[], // ③ {row, col, order}
+        walls:[], 
+        impassables: [], 
+        oneWayWalls: [], // ② {row, col, direction}
+        waypointsCount:0, 
+        playerIcon: 'arrow', // ⑧
+        targetMoves: 0 // ①
+    };
+    let gameState = { 
+        player:{row:0,col:0,dir:'up'}, 
+        sequence:[], 
+        originalSequence: [], // ④ 実行用のシーケンス
+        collectedWaypoints:new Set(), 
+        isRunning:false, 
+        moveMode:'absolute', 
+        exploded:false,
+        nextWaypointOrder: 1, // ③
+        currentStepIndex: 0, // ④
+        totalMoves: 0 // ①
+    };
 
     const playerElement = document.createElement('span');
     playerElement.id='player';
-    playerElement.innerHTML='<span class="text-green-600">▲</span>';
+    // ⑧ アイコンの中身は showGameView で設定
 
     // 設定グリッド
     gridRowsInput.addEventListener('input', updateSettingGrid);
     gridColsInput.addEventListener('input', updateSettingGrid);
 
     function updateSettingGrid(){
-      let rows = clamp(parseInt(gridRowsInput.value)||5,3,10);
-      let cols = clamp(parseInt(gridColsInput.value)||6,3,10);
+      const rows = clamp(parseInt(gridRowsInput.value)||5,3,10);
+      const cols = clamp(parseInt(gridColsInput.value)||6,3,10);
       gridRowsInput.value = rows; gridColsInput.value = cols;
       gameConfig.gridRows = rows; gameConfig.gridCols = cols;
       settingGridContainer.innerHTML='';
       settingGridContainer.style.gridTemplateColumns = `repeat(${cols}, minmax(0,1fr))`;
+      
+      // グリッドサイズ変更で範囲外になったアイテムを削除
       if (gameConfig.start && (gameConfig.start.row>=rows||gameConfig.start.col>=cols)) gameConfig.start=null;
       if (gameConfig.goal && (gameConfig.goal.row>=rows||gameConfig.goal.col>=cols)) gameConfig.goal=null;
       gameConfig.waypoints = gameConfig.waypoints.filter(w=>w.row<rows&&w.col<cols);
       gameConfig.walls = gameConfig.walls.filter(w=>w.row<rows&&w.col<cols);
-      // 既存WPの見た目反映
-      gameConfig.waypoints.forEach((wp,i)=>wp.icon=gameConfig.waypoints[i].icon ?? landmarks[i%landmarks.length]);
+      gameConfig.impassables = gameConfig.impassables.filter(w=>w.row<rows&&w.col<cols);
+      gameConfig.oneWayWalls = gameConfig.oneWayWalls.filter(w=>w.row<rows&&w.col<cols); // ②
+      
+      // ③ ウェイポイントの順序を再割り当て
+      gameConfig.waypoints.sort((a,b) => a.order - b.order);
+      gameConfig.waypoints.forEach((wp, i) => wp.order = i + 1);
+
       for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
         const d=document.createElement('div');
         d.className='setting-grid-cell';
@@ -209,22 +337,33 @@
       const cell=e.target.closest('.setting-grid-cell'); if(!cell) return;
       const row=+cell.dataset.row, col=+cell.dataset.col; const coord={row,col};
       const sel=itemSelector.querySelector('input[name="item-type"]:checked').value;
+      
+      // 既存アイテムを検索
       const isS=gameConfig.start && gameConfig.start.row===row && gameConfig.start.col===col;
       const isG=gameConfig.goal && gameConfig.goal.row===row && gameConfig.goal.col===col;
       const wpi=gameConfig.waypoints.findIndex(w=>w.row===row && w.col===col);
       const wli=gameConfig.walls.findIndex(w=>w.row===row && w.col===col);
+      const ipi=gameConfig.impassables.findIndex(w=>w.row===row && w.col===col);
+      const owi=gameConfig.oneWayWalls.findIndex(w=>w.row===row && w.col===col); // ②
+
+      // 選択と異なるアイテムを削除（消しゴム動作）
       if (sel!=='start' && isS) gameConfig.start=null;
       if (sel!=='goal' && isG) gameConfig.goal=null;
       if (sel!=='waypoint' && wpi>-1) gameConfig.waypoints.splice(wpi,1);
       if (sel!=='wall' && wli>-1) gameConfig.walls.splice(wli,1);
+      if (sel!=='impassable' && ipi>-1) gameConfig.impassables.splice(ipi,1);
+      // ②
+      if (sel!=='oneWayUp' && sel!=='oneWayDown' && sel!=='oneWayLeft' && sel!=='oneWayRight' && owi>-1) gameConfig.oneWayWalls.splice(owi,1);
+
+      // 新アイテムを配置
       switch(sel){
         case 'start': gameConfig.start=coord; break;
         case 'goal': gameConfig.goal=coord; break;
-        case 'waypoint':
+        case 'waypoint': // ③ 順序付き
           if(wpi===-1){
-            if(gameConfig.waypoints.length<6){
-              const icon = pickNextIcon();
-              gameConfig.waypoints.push({row,col,icon});
+            if(gameConfig.waypoints.length < 6){
+              const nextOrder = gameConfig.waypoints.length + 1;
+              gameConfig.waypoints.push({row, col, order: nextOrder});
             } else {
               flashError('通過地点は6個までです');
             }
@@ -233,19 +372,55 @@
         case 'wall':
           if(wli===-1) gameConfig.walls.push(coord);
           break;
-        case 'erase':
+        case 'impassable':
+          if(ipi===-1) gameConfig.impassables.push(coord);
           break;
+        // ② 一方向壁
+        case 'oneWayUp':
+        case 'oneWayDown':
+        case 'oneWayLeft':
+        case 'oneWayRight':
+          if(owi===-1) {
+            const direction = sel.replace('oneWay', '').toLowerCase(); // 'up', 'down', ...
+            gameConfig.oneWayWalls.push({ row, col, direction });
+          }
+          break;
+        case 'erase':
+          break; // 削除は上のロジックで完了
       }
-      gameConfig.waypoints.forEach((wp,i)=>wp.icon=gameConfig.waypoints[i].icon ?? landmarks[i%landmarks.length]);
+      
+      // ③ ウェイポイント順序を再割り当て
+      gameConfig.waypoints.sort((a,b) => a.order - b.order);
+      gameConfig.waypoints.forEach((wp, i) => wp.order = i + 1);
+
       updateSettingGridUI();
     }
 
     function updateSettingGridUI(){
-      settingGridContainer.querySelectorAll('.setting-grid-cell').forEach(c=>c.textContent='');
-      gameConfig.walls.forEach(w=>{ const c=getSetCell(w.row,w.col); if(c) c.textContent='❌'; });
-      gameConfig.waypoints.forEach(wp=>{ const c=getSetCell(wp.row,wp.col); if(c) c.textContent=wp.icon; });
+      settingGridContainer.querySelectorAll('.setting-grid-cell').forEach(c=>{
+        c.textContent='';
+        c.classList.remove('setting-wall-cell', 'setting-oneway-cell');
+      });
+      gameConfig.walls.forEach(w=>{
+        const c=getSetCell(w.row,w.col);
+        if(c) { c.classList.add('setting-wall-cell'); c.textContent=''; }
+      });
+      // ②
+      gameConfig.oneWayWalls.forEach(w=>{
+        const c=getSetCell(w.row,w.col);
+        if(c) { 
+            c.classList.add('setting-oneway-cell'); 
+            c.textContent = onewayIcons[w.direction] || '?';
+        }
+      });
+      gameConfig.impassables.forEach(w=>{ const c=getSetCell(w.row,w.col); if(c) c.textContent='👻'; });
+      // ③
+      gameConfig.waypoints.forEach(wp=>{ 
+        const c=getSetCell(wp.row,wp.col); 
+        if(c) c.textContent = waypointIcons[wp.order - 1] || `${wp.order}`;
+      });
       if (gameConfig.goal){ const c=getSetCell(gameConfig.goal.row,gameConfig.goal.col); if(c) c.textContent='🏠'; }
-      if (gameConfig.start){ const c=getSetCell(gameConfig.start.row,gameConfig.start.col); if(c) c.textContent='🏝️'; }
+      if (gameConfig.start){ const c=getSetCell(gameConfig.start.row,gameConfig.start.col); if(c) c.innerHTML='<span class="text-green-600">▲</span>'; }
     }
     const getSetCell=(r,c)=>settingGridContainer.querySelector(`[data-row="${r}"][data-col="${c}"]`);
 
@@ -255,8 +430,7 @@
       gameConfig.gridCols=rand(3,10);
       gridRowsInput.value=gameConfig.gridRows;
       gridColsInput.value=gameConfig.gridCols;
-      gameConfig.waypointsCount=rand(0,6);
-      resetIcons();
+      gameConfig.waypointsCount=rand(0,3); // ランダムは3個までに
       randomizeItemPlacement();
       updateSettingGrid();
     });
@@ -265,7 +439,6 @@
       gameConfig.gridRows=+gridRowsInput.value;
       gameConfig.gridCols=+gridColsInput.value;
       gameConfig.waypointsCount=gameConfig.waypoints.length;
-      resetIcons();
       randomizeItemPlacement();
       updateSettingGridUI();
     });
@@ -273,12 +446,14 @@
     function randomizeItemPlacement(){
       const rows=gameConfig.gridRows, cols=gameConfig.gridCols, count=gameConfig.waypointsCount; const used=new Set();
       gameConfig.walls=[];
+      gameConfig.impassables=[];
+      gameConfig.oneWayWalls=[]; // ②
       gameConfig.start = randomEmpty(rows,cols,used);
       gameConfig.goal = randomEmpty(rows,cols,used);
-      gameConfig.waypoints=[];
+      gameConfig.waypoints=[]; // ③
       for(let i=0;i<count;i++){
         const p=randomEmpty(rows,cols,used);
-        gameConfig.waypoints.push({row:p.row,col:p.col,icon:pickNextIcon()});
+        gameConfig.waypoints.push({row:p.row,col:p.col, order: i + 1});
       }
     }
 
@@ -292,14 +467,25 @@
       gameConfig.gridRows=+gridRowsInput.value;
       gameConfig.gridCols=+gridColsInput.value;
       gameConfig.waypointsCount=gameConfig.waypoints.length;
+      gameConfig.playerIcon = iconSelector.querySelector('input[name="player-icon"]:checked')?.value || 'arrow'; // ⑧
+
       try{
         if(!gameConfig.start) throw new Error('スタートを配置してください');
         if(!gameConfig.goal) throw new Error('ゴールを配置してください');
-        const all=[gameConfig.start,gameConfig.goal,...gameConfig.waypoints,...gameConfig.walls];
+        
+        // ②, ③ を含む全アイテム
+        const all=[
+            gameConfig.start,
+            gameConfig.goal,
+            ...gameConfig.waypoints,
+            ...gameConfig.walls, 
+            ...gameConfig.impassables,
+            ...gameConfig.oneWayWalls
+        ];
         const set=new Set();
         for(const a of all){
           const s=`${a.row},${a.col}`;
-          if(set.has(s)) throw new Error('配置が重複しています');
+          if(set.has(s)) throw new Error('アイテムの配置が重複しています');
           set.add(s);
         }
         return true;
@@ -312,24 +498,42 @@
     // ゲームビュー
     backToSettingsBtn.addEventListener('click', showSettingsView);
     modeAbsoluteBtn.addEventListener('click',()=>setMoveMode('absolute'));
+    modeCardinalBtn.addEventListener('click',()=>setMoveMode('cardinal'));
     modeRelativeBtn.addEventListener('click',()=>setMoveMode('relative'));
 
     function setMoveMode(mode){
       gameState.moveMode=mode; gameState.sequence=[]; updateSequenceDisplay(); resetPlayer();
-      if(mode==='absolute'){
-        modeAbsoluteBtn.classList.add('active'); modeRelativeBtn.classList.remove('active');
+      [modeAbsoluteBtn, modeCardinalBtn, modeRelativeBtn].forEach(b => b.classList.remove('active'));
+      if(mode==='absolute') modeAbsoluteBtn.classList.add('active');
+      else if(mode==='cardinal') modeCardinalBtn.classList.add('active');
+      else modeRelativeBtn.classList.add('active');
+
+      if(mode==='cardinal') gridWrapper.classList.add('mode-cardinal');
+      else gridWrapper.classList.remove('mode-cardinal');
+
+      if(mode==='absolute' || mode==='cardinal'){
+        const labels = (mode==='absolute')
+          ? {up:'⬆️', left:'⬅️', right:'➡️', down:'⬇️'}
+          : {up:'北', left:'西', right:'東', down:'南'};
+
         directionPad.innerHTML=`<div class="grid grid-cols-3 grid-rows-3 gap-1 w-full h-full place-items-center">
-          <div class="col-start-2 row-start-1"><button data-action="up" class="dir-btn p-2 text-2xl">⬆️</button></div>
-          <div class="col-start-1 row-start-2"><button data-action="left" class="dir-btn p-2 text-2xl">⬅️</button></div>
-          <div class="col-start-3 row-start-2"><button data-action="right" class="dir-btn p-2 text-2xl">➡️</button></div>
-          <div class="col-start-2 row-start-3"><button data-action="down" class="dir-btn p-2 text-2xl">⬇️</button></div>
+          <div class="col-start-2 row-start-1"><button data-action="up" class="dir-btn p-2 text-2xl font-bold w-full h-full flex items-center justify-center rounded-lg">...</button></div>
+          <div class="col-start-1 row-start-2"><button data-action="left" class="dir-btn p-2 text-2xl font-bold w-full h-full flex items-center justify-center rounded-lg">...</button></div>
+          <div class="col-start-3 row-start-2"><button data-action="right" class="dir-btn p-2 text-2xl font-bold w-full h-full flex items-center justify-center rounded-lg">...</button></div>
+          <div class="col-start-2 row-start-3"><button data-action="down" class="dir-btn p-2 text-2xl font-bold w-full h-full flex items-center justify-center rounded-lg">...</button></div>
         </div>`;
-      }else{
-        modeAbsoluteBtn.classList.remove('active'); modeRelativeBtn.classList.add('active');
+        // ラベルを遅延設定（innerHTMLのパース待ち）
+        setTimeout(() => {
+            directionPad.querySelector('[data-action="up"]').innerHTML = labels.up;
+            directionPad.querySelector('[data-action="left"]').innerHTML = labels.left;
+            directionPad.querySelector('[data-action="right"]').innerHTML = labels.right;
+            directionPad.querySelector('[data-action="down"]').innerHTML = labels.down;
+        }, 0);
+      } else {
         directionPad.innerHTML=`<div class="grid grid-cols-3 gap-2 w-full h-full items-center">
-          <button data-action="turnLeft" class="dir-btn px-3 py-2 border rounded">左を向く</button>
-          <button data-action="forward" class="dir-btn px-3 py-2 border rounded">前進する</button>
-          <button data-action="turnRight" class="dir-btn px-3 py-2 border rounded">右を向く</button>
+          <button data-action="turnLeft" class="dir-btn px-3 py-2 border rounded font-bold text-gray-700 bg-gray-50">左を向く</button>
+          <button data-action="forward" class="dir-btn px-3 py-2 border rounded font-bold text-gray-700 bg-gray-50">前進する</button>
+          <button data-action="turnRight" class="dir-btn px-3 py-2 border rounded font-bold text-gray-700 bg-gray-50">右を向く</button>
         </div>`;
       }
       addDirListeners();
@@ -342,6 +546,7 @@
           if(gameState.isRunning) return;
           const a=btn.dataset.action;
           gameState.sequence.push(a);
+          gameState.originalSequence = [...gameState.sequence]; // ⑥ デバッグ用に即時反映
           updateSequenceDisplay();
         });
       });
@@ -351,30 +556,59 @@
       await initAudio();
       if(gameState.isRunning) return;
       gameState.sequence.pop();
+      gameState.originalSequence = [...gameState.sequence];
       updateSequenceDisplay();
+      highlightSequenceCommand(-1); // ⑥ ハイライト解除
+      toast(''); // ⑥ メッセージ解除
     });
     resetBtn.addEventListener('click', async ()=>{
       await initAudio();
       if(gameState.isRunning) return;
       gameState.sequence=[];
+      gameState.originalSequence = [];
       updateSequenceDisplay();
-      generateMap();
+      generateMap(); // マップ再描画（1️⃣などを元に戻す）
       resetPlayer();
-      toast('リセットしました');
+      toast(''); // ⑥ メッセージ解除
     });
 
-    // 一手進む（逐次実行）
     stepBtn.addEventListener('click', async ()=>{
       await initAudio();
-      if(gameState.isRunning||gameState.sequence.length===0) return;
+      if(gameState.isRunning || gameState.sequence.length===0) return;
+      
+      // stepBtnが初めて押された（またはリセット後）
+      if(gameState.currentStepIndex === 0 && !gameState.isRunning) {
+         resetPlayer(); // プレイヤーをスタートに戻す
+         gameState.originalSequence = [...gameState.sequence]; // 実行シーケンスを確定
+      }
+      
       gameState.isRunning=true; setDisabled(true);
-      const ok = await runOneStep();
-      if(ok) checkGoal();
+      gameState.exploded=false;
+      
+      const action = gameState.originalSequence[gameState.currentStepIndex];
+      highlightSequenceCommand(gameState.currentStepIndex); // ④
+      
+      if (action) {
+        const result = await runOneStep(action);
+        
+        if (result !== 'success') {
+          handleFailure(result, gameState.currentStepIndex); // ⑥
+          // 失敗したらstepIndexを進めない
+        } else {
+          gameState.currentStepIndex++; // 成功したら次へ
+          checkGoal(); // 毎ステップゴール判定
+        }
+      }
+
       gameState.isRunning=false; setDisabled(false);
     });
+    
     runBtn.addEventListener('click', async ()=>{
       await initAudio();
       if(gameState.isRunning||gameState.sequence.length===0) return;
+      // ⑥
+      gameState.originalSequence = [...gameState.sequence];
+      gameState.totalMoves = gameState.sequence.length; // ①
       runSequence();
     });
 
@@ -382,36 +616,68 @@
       gameView.classList.add('hidden');
       settingsView.classList.remove('hidden');
       gameState.sequence=[];
+      gameState.originalSequence = [];
       updateSequenceDisplay();
       setMoveMode('absolute');
-      messageArea.textContent='';
     }
+    
     function showGameView(){
       settingsView.classList.add('hidden');
       gameView.classList.remove('hidden');
+      
+      // ⑧ プレイヤーアイコン設定
+      const iconMap = {
+          arrow: '<span class="text-green-600">▲</span>',
+          car: '🚗',
+          chick: '🐤'
+      };
+      playerElement.innerHTML = `<span class="player-icon-inner">${iconMap[gameConfig.playerIcon] || iconMap.arrow}</span>`;
+
+      // ① 目標ターン数計算（簡易ヒューリスティック）
+      const baseMoves = (gameConfig.gridRows - 1) + (gameConfig.gridCols - 1); // マップ対角線
+      gameConfig.targetMoves = Math.ceil(baseMoves * 1.2) + (gameConfig.waypoints.length * 3) + gameConfig.walls.length + (gameConfig.oneWayWalls.length * 2);
+      turnInfo.textContent = `目標: ${gameConfig.targetMoves} 手`;
+
       generateMap();
       resetPlayer();
       setMoveMode('absolute');
+      toast(''); // ⑥ メッセージクリア
     }
 
     function generateMap(){
       gridContainer.innerHTML='';
       gridContainer.style.gridTemplateColumns=`repeat(${gameConfig.gridCols}, minmax(0,1fr))`;
-      const parent=gridContainer.parentElement; const cw=parent.clientWidth-16; const ch=parent.clientHeight-16;
+      const parent=gridContainer.parentElement.parentElement;
+      const cw=parent.clientWidth-40;
+      const ch=parent.clientHeight-40;
       const size=Math.min(cw/gameConfig.gridCols, ch/gameConfig.gridRows);
       gridContainer.style.width=`${size*gameConfig.gridCols}px`;
       gridContainer.style.height=`${size*gameConfig.gridRows}px`;
+
+      gridWrapper.style.width = gridContainer.style.width;
+      gridWrapper.style.height = gridContainer.style.height;
+
       const font=size*0.4; playerElement.style.fontSize=`${font*0.8}px`;
       for(let r=0;r<gameConfig.gridRows;r++) for(let c=0;c<gameConfig.gridCols;c++){
         const cell=document.createElement('div');
         cell.id=`cell-${r}-${c}`;
         cell.className='grid-cell';
         cell.style.fontSize=`${font}px`;
-        if (gameConfig.walls.some(w=>w.row===r&&w.col===c)) cell.textContent='❌';
+        if (gameConfig.walls.some(w=>w.row===r&&w.col===c)) {
+          cell.classList.add('wall-cell');
+        }
+        // ②
+        else if (gameConfig.oneWayWalls.some(w=>w.row===r&&w.col===c)) {
+            const ow = gameConfig.oneWayWalls.find(w=>w.row===r&&w.col===c);
+            cell.textContent = onewayIcons[ow.direction] || '?';
+            cell.classList.add('setting-oneway-cell'); // 見た目を少し変える
+        }
+        else if (gameConfig.impassables.some(w=>w.row===r&&w.col===c)) cell.textContent='👻';
         else if (gameConfig.goal && gameConfig.goal.row===r && gameConfig.goal.col===c) cell.textContent='🏠';
         else {
+          // ③
           const wp=gameConfig.waypoints.find(w=>w.row===r&&w.col===c);
-          if(wp) cell.textContent=wp.icon;
+          if(wp) cell.textContent = waypointIcons[wp.order - 1] || `${wp.order}`;
         }
         gridContainer.appendChild(cell);
       }
@@ -421,106 +687,232 @@
       if(!gameConfig.start) return;
       gameState.player.row=gameConfig.start.row;
       gameState.player.col=gameConfig.start.col;
-      changeDirection('up');
+      changeDirection('up'); // ⑧ 回転リセット
       gameState.collectedWaypoints.clear();
+      gameState.nextWaypointOrder = 1; // ③
+      gameState.currentStepIndex = 0; // ④
+      gameState.exploded = false;
+      highlightSequenceCommand(-1); // ⑥ ハイライト解除
+      
       const s=document.getElementById(`cell-${gameConfig.start.row}-${gameConfig.start.col}`);
       if(s){ playerElement.remove(); s.appendChild(playerElement);}
     }
 
     async function runSequence(){
       gameState.isRunning=true; setDisabled(true);
-      messageArea.textContent='実行中...';
-      resetPlayer();
+      gameState.exploded=false;
+      resetPlayer(); // 実行前にリセット (currentStepIndex=0 に)
+      
+      const sequenceToRun = [...gameState.originalSequence];
       await delay(200);
-      while(gameState.sequence.length>0){
-        const ok = await runOneStep();
-        if(!ok) break;
-        await delay(200);
+      
+      while(gameState.currentStepIndex < sequenceToRun.length){
+        const action = sequenceToRun[gameState.currentStepIndex];
+        highlightSequenceCommand(gameState.currentStepIndex); // ④
+        
+        const result = await runOneStep(action);
+        
+        if(result !== 'success'){
+            gameState.exploded = true;
+            handleFailure(result, gameState.currentStepIndex); // ⑥
+            break; // 👻ヒット等で即終了
+        }
+        
+        gameState.currentStepIndex++; // 成功したら次へ
+
+        // ④ 相対方位の回転アニメーション待ちは runOneStep 内で処理
+        // 移動アニメーション待ち
+        if (action === 'forward' || gameState.moveMode !== 'relative') {
+             await delay(500);
+        }
       }
-      checkGoal();
+      
+      // 終了判定（👻で終わってなければ）
+      if(!gameState.exploded){
+        // ③
+        const reachedGoal = (gameState.player.row===gameConfig.goal.row && gameState.player.col===gameConfig.goal.col);
+        const allWaypoints = gameState.nextWaypointOrder === (gameConfig.waypoints.length + 1);
+
+        if(reachedGoal && allWaypoints){
+          playSuccess();
+          const goal=document.getElementById(`cell-${gameConfig.goal.row}-${gameConfig.goal.col}`);
+          if(goal){ goal.classList.add('effect-tada'); setTimeout(()=>goal.classList.remove('effect-tada'),1000); }
+          
+          // ① ターゲットチェック
+          if (gameState.totalMoves <= gameConfig.targetMoves) {
+              toast(`Great! (${gameState.totalMoves}手)`, 'success');
+          } else {
+              toast(`クリア! (${gameState.totalMoves}手)`, 'success');
+          }
+
+        }else{
+          playFailLong();
+          if (!reachedGoal) toast('ゴールにたどり着けませんでした', 'error');
+          else if (!allWaypoints) toast('通過地点をすべて通っていません', 'error');
+        }
+      }
+      
       gameState.isRunning=false; setDisabled(false);
     }
 
-    async function runOneStep(){
-      const action = gameState.sequence.shift(); if(!action) return false;
-      let nr=gameState.player.row, nc=gameState.player.col; let moved=false;
-      if (gameState.moveMode==='absolute'){
-        changeDirection(action);
-        if(action==='up') nr--; else if(action==='down') nr++; else if(action==='left') nc--; else if(action==='right') nc++;
+    // ④, ⑥ アクションを引数で受け取る
+    async function runOneStep(action){
+      if(!action) return 'success';
+      let nr=gameState.player.row, nc=gameState.player.col; 
+      let moved=false;
+      let moveDir = ''; // ②
+
+      if (gameState.moveMode==='absolute' || gameState.moveMode==='cardinal'){
+        changeDirection(action, false); // ④ 回転アニメなし
+        if(action==='up') { nr--; moveDir='up'; }
+        else if(action==='down') { nr++; moveDir='down'; }
+        else if(action==='left') { nc--; moveDir='left'; }
+        else if(action==='right') { nc++; moveDir='right'; }
         moved=true;
       } else {
         const cur=gameState.player.dir;
         if(action==='forward'){
-          changeDirection(cur);
-          if(cur==='up') nr--; else if(cur==='down') nr++; else if(cur==='left') nc--; else if(cur==='right') nc++;
+          changeDirection(cur, false); // 回転なし
+          if(cur==='up') { nr--; moveDir='up'; }
+          else if(cur==='down') { nr++; moveDir='down'; }
+          else if(cur==='left') { nc--; moveDir='left'; }
+          else if(cur==='right') { nc++; moveDir='right'; }
           moved=true;
         }
-        else if(action==='turnRight'){ const map={up:'right', right:'down', down:'left', left:'up'}; changeDirection(map[cur]); }
-        else if(action==='turnLeft'){ const map={up:'left', left:'down', down:'right', right:'up'}; changeDirection(map[cur]); }
+        // ④ 回転アニメーション
+        else if(action==='turnRight'){ const map={up:'right', right:'down', down:'left', left:'up'}; changeDirection(map[cur], true); await delay(300); }
+        else if(action==='turnLeft'){ const map={up:'left', left:'down', down:'right', right:'up'}; changeDirection(map[cur], true); await delay(300); }
       }
+
       if(moved){
-        if(nr<0||nr>=gameConfig.gridRows||nc<0||nc>=gameConfig.gridCols){ messageArea.textContent='マップ外に出ました'; return false; }
-        if(gameConfig.walls.some(w=>w.row===nr&&w.col===nc)){ messageArea.textContent='通行不可です'; return false; }
+        // ⑥ 枠外
+        if(nr<0||nr>=gameConfig.gridRows||nc<0||nc>=gameConfig.gridCols) return 'hitOutOfBounds';
+        // ⑥ 壁
+        if(gameConfig.walls.some(w=>w.row===nr&&w.col===nc)) return 'hitWall';
+
+        // ② 一方向壁
+        const oneWay = gameConfig.oneWayWalls.find(w => w.row === nr && w.col === nc);
+        if (oneWay && oneWay.direction !== moveDir) {
+            return 'hitOneWayWall'; // 許可された方向以外での進入
+        }
+
+        // 進行確定
         gameState.player.row=nr; gameState.player.col=nc;
         const cell=document.getElementById(`cell-${nr}-${nc}`); if(cell) cell.appendChild(playerElement);
 
-        // ウェイポイント取得
-        const wpIndex = gameConfig.waypoints.findIndex(w=>w.row===nr && w.col===nc);
-        if(wpIndex > -1){
+        // ⑥ 👻
+        if(gameConfig.impassables.some(w=>w.row===nr&&w.col===nc)){
+          return 'hitImpassable';
+        }
+
+        // ③ ウェイポイント取得
+        const wp = gameConfig.waypoints.find(w=>w.row===nr && w.col===nc);
+        if(wp){
           const key=`${nr},${nc}`;
           if(!gameState.collectedWaypoints.has(key)){
-            gameState.collectedWaypoints.add(key);
-            playTone(440,0.08);
-            const effect=document.createElement('div');
-            effect.className='effect-ping';
-            if(cell){
-              const p=cell.querySelector('#player');
-              p?cell.insertBefore(effect,p):cell.appendChild(effect);
-              setTimeout(()=>effect.remove(),1000);
+            // ③ 順序チェック
+            if (wp.order === gameState.nextWaypointOrder) {
+                gameState.collectedWaypoints.add(key);
+                gameState.nextWaypointOrder++;
+                playTone(440,0.08);
+                const effect=document.createElement('div');
+                effect.className='effect-ping';
+                if(cell){
+                  const p=cell.querySelector('#player');
+                  p?cell.insertBefore(effect,p):cell.appendChild(effect);
+                  setTimeout(()=>effect.remove(),1000);
+                }
+                // 1️⃣ を消す
+                Array.from(cell.childNodes)
+                  .filter(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '')
+                  .forEach(n => n.textContent = '');
+            } else if (wp.order > gameState.nextWaypointOrder) {
+                // 順序が違う
+                return 'wrongWaypointOrder';
             }
-            Array.from(cell.childNodes)
-              .filter(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '')
-              .forEach(n => n.textContent = '');
+            // (wp.order < gameState.nextWaypointOrder) は既に踏んだ場所
           }
         }
       }
-      return true;
+      return 'success'; // 成功
     }
 
-    function changeDirection(dir){
+    // ④, ⑧ 回転アニメーション対応
+    function changeDirection(dir, animate = false){
       gameState.player.dir=dir;
-      playerElement.innerHTML =
-        dir==='up'   ? '<span class="text-green-600">▲</span>' :
-        dir==='down' ? '<span class="text-green-600">▼</span>' :
-        dir==='left' ? '<span class="text-green-600">◀</span>' :
-                       '<span class="text-green-600">▶</span>';
+      const dirMap = { up: '0deg', right: '90deg', down: '180deg', left: '270deg' };
+      const innerIcon = playerElement.querySelector('.player-icon-inner');
+      if (innerIcon) {
+          if (animate) {
+              innerIcon.style.transition = 'transform 0.3s ease-in-out';
+          } else {
+              innerIcon.style.transition = 'none';
+          }
+          innerIcon.style.transform = `rotate(${dirMap[dir]})`;
+      }
     }
 
     function checkGoal(){
       const atGoal = gameState.player.row===gameConfig.goal.row && gameState.player.col===gameConfig.goal.col;
-      const all = gameState.collectedWaypoints.size===gameConfig.waypoints.length;
+      const all = gameState.nextWaypointOrder === (gameConfig.waypoints.length + 1);
       if(atGoal && all){
-        messageArea.textContent='🎉 クリア！おめでとう！';
-        playTone(880,0.3);
-        setTimeout(()=>{ sayWaai(); }, 1350); // +1秒待ち
         const goal=document.getElementById(`cell-${gameConfig.goal.row}-${gameConfig.goal.col}`);
         if(goal){ goal.classList.add('effect-tada'); setTimeout(()=>goal.classList.remove('effect-tada'),1000); }
-      }
-      else if(atGoal){
-        messageArea.textContent=`ゴール！ 通過地点: ${gameState.collectedWaypoints.size}/${gameConfig.waypoints.length}`;
-      }
-      else if(messageArea.textContent==='実行中...'){
-        messageArea.textContent='未到達';
+        // (step実行時はここで音を鳴らしても良い)
+        // playSuccess();
       }
     }
 
     function updateSequenceDisplay(){
-      const map={ up:'⬆️', down:'⬇️', left:'⬅️', right:'➡️', forward:'前', turnLeft:'左', turnRight:'右' };
-      sequenceDisplay.innerHTML = gameState.sequence.map(a=>`<span class="px-1 bg-gray-100 rounded">${map[a]||a}</span>`).join('');
+      let map; let modeClass = 'px-1';
+      if(gameState.moveMode === 'cardinal'){
+        map={ up:'北', down:'南', left:'西', right:'東' };
+        modeClass = 'px-2 py-1 rounded-md cmd-relative';
+      } else if (gameState.moveMode === 'relative'){
+        map={ forward:'前', turnLeft:'左', turnRight:'右' };
+        modeClass = 'px-2 py-1 rounded-md cmd-relative';
+      } else {
+        map={ up:'⬆️', down:'⬇️', left:'⬅️', right:'➡️' };
+      }
+      // ④ data-index を追加
+      sequenceDisplay.innerHTML = gameState.sequence.map((a, i)=>`<span data-index="${i}" class="${modeClass} transition-transform duration-150">${map[a]||a}</span>`).join('');
+    }
+
+    // ⑥ 失敗処理
+    function handleFailure(reason, index) {
+        const reasonMap = {
+            hitWall: '壁にぶつかりました',
+            hitOutOfBounds: 'コースの外に出ました',
+            hitImpassable: '👻にぶつかりました',
+            hitOneWayWall: '一方通行の壁に入れません',
+            wrongWaypointOrder: '通過地点の順序が違います',
+            default: 'エラーが発生しました'
+        };
+        const msg = reasonMap[reason] || reasonMap.default;
+        console.error(`Failure at step ${index}: ${reason}`);
+        toast(msg, 'error'); // メッセージ表示
+        highlightSequenceCommand(index, true); // 赤く強調
+        
+        if (reason === 'hitImpassable') playGhostTriple();
+        else playFailLong();
+    }
+    
+    // ④, ⑥ シーケンス強調
+    function highlightSequenceCommand(index, isError = false) {
+        sequenceDisplay.querySelectorAll('span').forEach((span, i) => {
+            span.classList.remove('seq-highlight', 'seq-error');
+            if (i === index) {
+                if (isError) {
+                    span.classList.add('seq-error');
+                } else {
+                    span.classList.add('seq-highlight');
+                }
+            }
+        });
     }
 
     function setDisabled(dis){
-      [undoBtn,resetBtn,runBtn,stepBtn,modeAbsoluteBtn,modeRelativeBtn].forEach(b=>{
+      [undoBtn,resetBtn,runBtn,stepBtn,modeAbsoluteBtn,modeCardinalBtn,modeRelativeBtn, backToSettingsBtn].forEach(b=>{
         b.disabled=dis; b.classList.toggle('opacity-50',dis);
       });
       directionPad.querySelectorAll('.dir-btn').forEach(b=>b.disabled=dis);
@@ -529,30 +921,32 @@
     function randomEmpty(rows,cols,used){ let r,c,s; do{ r=rand(0,rows-1); c=rand(0,cols-1); s=`${r},${c}`; }while(used.has(s)); used.add(s); return {row:r,col:c}; }
 
     function flashError(msg){ settingsError.textContent=msg; setTimeout(()=>settingsError.textContent='',1800); }
-    function toast(msg){ messageArea.textContent=msg; setTimeout(()=>{ if(messageArea.textContent===msg) messageArea.textContent=''; },1500); }
+    
+    // ⑥ メッセージ表示（トースト）
+    function toast(msg, type = 'success') {
+        messageArea.textContent = msg;
+        messageArea.classList.remove('text-green-600', 'text-red-600', 'opacity-0');
+        if (type === 'error') {
+            messageArea.classList.add('text-red-600');
+        } else {
+            messageArea.classList.add('text-green-600');
+        }
+        messageArea.style.display = msg ? 'block' : 'none'; // 表示/非表示
+    }
 
-    // --- 簡易テスト（コンソールに結果出力） ---
-    (function runTests(){
-      const results=[]; const assert=(cond,msg)=>{ if(!cond) throw new Error(msg); };
-      try {
-        const used=new Set(); const a=randomEmpty(3,3,used); const b=randomEmpty(3,3,used); 
-        assert(coordToString(a)!==coordToString(b),'randomEmpty 重複');
-        gameState.moveMode='absolute'; gameState.sequence=['right','down']; gameConfig.gridRows=5; gameConfig.gridCols=5; gameConfig.start={row:2,col:2}; gameConfig.goal={row:4,col:4};
-        generateMap(); resetPlayer();
-        (async ()=>{ await runOneStep(); await runOneStep(); assert(gameState.player.row===3 && gameState.player.col===3,'絶対方位 移動失敗'); })();
-        gameState.moveMode='relative'; gameState.sequence=['turnRight','forward']; resetPlayer();
-        (async ()=>{ await runOneStep(); await runOneStep(); assert(gameState.player.dir==='right','相対方位 右向き失敗'); })();
-        results.push('Tests passed');
-      } catch(e){ console.error('Test failure:', e.message); results.push('Test failure: '+e.message); }
-      console.log('[Navigator Tests]', ...results);
-    })();
-
-    // SW
-    if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
-
-    // 初期（5×6固定）
+    // 初期化
     updateSettingGrid();
     setMoveMode('absolute');
+
+    // iPadの拡大防止（ダブルタップ／ピンチ）
+    document.addEventListener('dblclick', e => e.preventDefault(), { passive:false });
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', e => {
+      const now = Date.now();
+      if(now - lastTouchEnd <= 300){ e.preventDefault(); }
+      lastTouchEnd = now;
+    }, { passive:false });
+    document.addEventListener('gesturestart', e => e.preventDefault());
   });
   </script>
 </body>
