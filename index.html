@@ -374,8 +374,8 @@
       if (gameConfig.goal){ const c=getSetCell(gameConfig.goal.row,gameConfig.goal.col); if(c) c.textContent='🏠'; }
       if (gameConfig.start){ 
         const c=getSetCell(gameConfig.start.row,gameConfig.start.col); 
-        // (修正) 🐤 アイコン (上向き)
-        if(c) c.innerHTML='<span style="display:inline-block; transform: rotate(90deg);">🐤</span>'; 
+        // (修正) 🐤 アイコン (左向き)
+        if(c) c.innerHTML='<span style="display:inline-block; transform: none;">🐤</span>'; 
       }
     }
     const getSetCell=(r,c)=>settingGridContainer.querySelector(`[data-row="${r}"][data-col="${c}"]`);
@@ -495,10 +495,11 @@
           <div class="col-start-2 row-start-3"><button data-action="down" class="dir-btn p-2 text-2xl font-bold w-full h-full flex items-center justify-center rounded-lg">${labels.down}</button></div>
         </div>`;
       } else {
+        // (修正) ボタンのテキストを「左に90°」「右に90°」に変更
         directionPad.innerHTML=`<div class="grid grid-cols-3 gap-2 w-full h-full items-center">
-          <button data-action="turnLeft" class="dir-btn px-3 py-2 border rounded font-bold text-gray-700 bg-gray-50">左を向く</button>
+          <button data-action="turnLeft" class="dir-btn px-3 py-2 border rounded font-bold text-gray-700 bg-gray-50">左に90°</button>
           <button data-action="forward" class="dir-btn px-3 py-2 border rounded font-bold text-gray-700 bg-gray-50">前進する</button>
-          <button data-action="turnRight" class="dir-btn px-3 py-2 border rounded font-bold text-gray-700 bg-gray-50">右を向く</button>
+          <button data-action="turnRight" class="dir-btn px-3 py-2 border rounded font-bold text-gray-700 bg-gray-50">右に90°</button>
         </div>`;
       }
       addDirListeners();
@@ -654,7 +655,7 @@
       if(!gameConfig.start) return;
       gameState.player.row=gameConfig.start.row;
       gameState.player.col=gameConfig.start.col;
-      changeDirection('up'); // 🐤 は上向き (rotate(90deg))
+      changeDirection('left'); // (修正) 🐤 は左向き (transform: none)
       gameState.collectedWaypoints.clear();
       gameState.nextWaypointIndex = 0; // (追加)
       gameState.errorStep = -1;        // (追加)
